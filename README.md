@@ -40,7 +40,6 @@ To run the application, simply download the executable from the `dist` folder an
     ├── widgets.py # Contains custom widget classes and PDF viewer widget creation
     ├── pdf_editor.py # Main PDF Editor application logic
     ├── main.py # Entry point for the application
-    ├── image.png # Image for the initial screen
     ├── README.md # This readme file
     └── dist/ # Folder containing the executable file
 
