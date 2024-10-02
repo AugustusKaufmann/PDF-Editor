@@ -1,14 +1,16 @@
 import os
-import fitz  # PyMuPDF
 import logging
+from pymupdf import pymupdf
 from PyQt6.QtWidgets import (QMainWindow, QTabWidget, QFileDialog, QMessageBox, QInputDialog, QLineEdit,
-                             QDialog)
+                             QDialog, QLabel, QVBoxLayout, QWidget, QPushButton)
 from PyQt6.QtGui import (QAction)
 from PyQt6.QtCore import Qt
+
 from dialogs import (RearrangePagesDialog, EncryptionOptionsDialog, MergePDFsDialog, SplitPDFDialog)
 from widgets import create_pdf_viewer_widget
 
 class PDFEditor(QMainWindow):
+    count = 0
     def __init__(self):
         super().__init__()
 
@@ -34,12 +36,11 @@ class PDFEditor(QMainWindow):
         self.create_menu_bar()
 
     def create_central_widget(self):
-        from PyQt6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget
         central_widget = QWidget()
         central_layout = QVBoxLayout()
         central_widget.setLayout(central_layout)
 
-        welcome_label = QLabel("Open a PDF to get started")
+        welcome_label = QLabel("Ctrl + O to get started")
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font = welcome_label.font()
         font.setPointSize(13)
@@ -51,10 +52,9 @@ class PDFEditor(QMainWindow):
         #open_button.clicked.connect(self.openFile)
         #open_button.setFixedWidth(200)
 
-        central_layout.addStretch(1)
         central_layout.addWidget(welcome_label)
+        #central_layout.addSpacing(0)
         #central_layout.addWidget(open_button, alignment=Qt.AlignmentFlag.AlignCenter)
-        central_layout.addStretch(1)
 
         return central_widget
 
@@ -80,28 +80,29 @@ class PDFEditor(QMainWindow):
 
     def create_menu_bar(self):
         menubar = self.menuBar()
-        fileMenu = menubar.addMenu('File')
-        fileMenu.addAction(self.openFileAction)
-        fileMenu.addAction(self.saveAsFileAction)
+        if len(menubar.children()) < 2:
+            fileMenu = menubar.addMenu('File')
+            fileMenu.addAction(self.openFileAction)
+            fileMenu.addAction(self.saveAsFileAction)
 
-        editMenu = menubar.addMenu('Tools')
-        editMenu.addAction(self.mergeFilesAction)
-        editMenu.addAction(self.splitFileAction)
-        editMenu.addAction(self.encryptFileAction)
-        editMenu.addAction(self.rearrangeFileAction)
+            editMenu = menubar.addMenu('Tools')
+            editMenu.addAction(self.mergeFilesAction)
+            editMenu.addAction(self.splitFileAction)
+            editMenu.addAction(self.encryptFileAction)
+            editMenu.addAction(self.rearrangeFileAction)
 
         # Set menubar stylesheet for hover effect
-        menubar.setStyleSheet("""
-            QMenuBar::item {
-                background: transparent;
-            }
-            QMenuBar::item:selected {
-                background: #1e81b0;
-            }
-            QMenu::item:selected {
-                background: #1e81b0;
-            }
-        """)
+            menubar.setStyleSheet("""
+                QMenuBar::item {
+                    background: transparent;
+                }
+                QMenuBar::item:selected {
+                    background: #1e81b0;
+                }
+                QMenu::item:selected {
+                    background: #1e81b0;
+                }
+            """)
 
     def openFile(self):
         try:
@@ -115,7 +116,7 @@ class PDFEditor(QMainWindow):
                     self.setCentralWidget(self.tabs)
                     self.tabs.setVisible(True)
 
-                pdf_document = fitz.open(fileName)
+                pdf_document = pymupdf.open(fileName)
                 if pdf_document.is_encrypted:
                     password, ok = QInputDialog.getText(self, 'Password Required', 'Enter password:',
                                                         QLineEdit.EchoMode.Password)
@@ -133,10 +134,14 @@ class PDFEditor(QMainWindow):
 
     def closeTab(self, index):
         try:
-            self.tabs.removeTab(index)
-            if self.tabs.count() == 0:
-                self.setCentralWidget(self.central_widget)
-                self.central_widget.setVisible(True)
+            #widget = self.tabs.widget(index)
+
+            #widget.deleteLater()
+            if self.tabs.count() == 1:
+                self.initUI()
+                #self.tabs.widget(index).deleteLater()
+            else:
+                self.tabs.removeTab(index)
         except Exception as e:
             logging.error(f"Failed to close tab: {e}")
             QMessageBox.critical(self, 'Error', f'Failed to close tab: {e}')
@@ -148,7 +153,7 @@ class PDFEditor(QMainWindow):
                 pdf_path = current_widget.pdf_path
                 new_pdf_path, _ = QFileDialog.getSaveFileName(self, 'Save As', pdf_path, 'PDF Files (*.pdf)')
                 if new_pdf_path:
-                    pdf_document = fitz.open(pdf_path)
+                    pdf_document = pymupdf.open(pdf_path)
                     pdf_document.save(new_pdf_path)
                     pdf_document.close()
                     QMessageBox.information(self, 'Success', f'PDF has been saved as {new_pdf_path}.')
@@ -176,13 +181,14 @@ class PDFEditor(QMainWindow):
 
     def apply_merge(self, pdf_paths):
         try:
-            merged_pdf = fitz.open()
+            merged_pdf = pymupdf.open()
             for pdf_path in pdf_paths:
-                pdf_document = fitz.open(pdf_path)
+                pdf_document = pymupdf.open(pdf_path)
                 merged_pdf.insert_pdf(pdf_document)
             merged_pdf_path = os.path.join(os.path.dirname(pdf_paths[0]), "merged.pdf")
             merged_pdf.save(merged_pdf_path)
             merged_pdf.close()
+            self.open_new_created(merged_pdf_path)
             QMessageBox.information(self, 'Success', f'PDFs have been merged and saved as {merged_pdf_path}.')
         except Exception as e:
             logging.error(f"Failed to apply merge: {e}")
@@ -206,13 +212,14 @@ class PDFEditor(QMainWindow):
 
     def apply_split(self, pdf_path, selected_pages):
         try:
-            pdf_document = fitz.open(pdf_path)
-            split_pdf = fitz.open()
+            pdf_document = pymupdf.open(pdf_path)
+            split_pdf = pymupdf.open()
             for page_num in selected_pages:
                 split_pdf.insert_pdf(pdf_document, from_page=page_num, to_page=page_num)
             split_pdf_path = os.path.join(os.path.dirname(pdf_path), "split.pdf")
             split_pdf.save(split_pdf_path)
             split_pdf.close()
+            self.open_new_created(split_pdf_path)
             QMessageBox.information(self, 'Success', f'PDF has been split and saved as {split_pdf_path}.')
         except Exception as e:
             logging.error(f"Failed to apply split: {e}")
@@ -223,7 +230,7 @@ class PDFEditor(QMainWindow):
             current_widget = self.tabs.currentWidget()
             if current_widget:
                 pdf_path = current_widget.pdf_path
-                pdf_document = fitz.open(pdf_path)
+                pdf_document = pymupdf.open(pdf_path)
                 if pdf_document.is_encrypted:
                     QMessageBox.information(self, 'Encrypt PDF', 'The PDF is already encrypted.')
                     self.showEncryptionOptions(pdf_path)
@@ -237,11 +244,12 @@ class PDFEditor(QMainWindow):
         try:
             password, ok = QInputDialog.getText(self, 'Set Password', 'Enter password:', QLineEdit.EchoMode.Password)
             if ok and password:
-                pdf_document = fitz.open(pdf_path)
+                pdf_document = pymupdf.open(pdf_path)
                 new_pdf_path = os.path.splitext(pdf_path)[0] + "_encrypted.pdf"
-                pdf_document.save(new_pdf_path, encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw=password,
+                pdf_document.save(new_pdf_path, encryption=pymupdf.PDF_ENCRYPT_AES_256, owner_pw=password,
                                   user_pw=password)
                 pdf_document.close()
+                self.open_new_created(new_pdf_path)
                 QMessageBox.information(self, 'Success',
                                         f'PDF has been encrypted successfully and saved as {new_pdf_path}.')
         except Exception as e:
@@ -253,7 +261,7 @@ class PDFEditor(QMainWindow):
             old_password, ok = QInputDialog.getText(self, 'Change Password', 'Enter current password:',
                                                     QLineEdit.EchoMode.Password)
             if ok and old_password:
-                pdf_document = fitz.open(pdf_path)
+                pdf_document = pymupdf.open(pdf_path)
                 if not pdf_document.authenticate(old_password):
                     QMessageBox.critical(self, 'Error', 'Current password is incorrect.')
                     return
@@ -262,9 +270,10 @@ class PDFEditor(QMainWindow):
                                                         QLineEdit.EchoMode.Password)
                 if ok and new_password:
                     new_pdf_path = os.path.splitext(pdf_path)[0] + "_newpassword.pdf"
-                    pdf_document.save(new_pdf_path, encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw=new_password,
+                    pdf_document.save(new_pdf_path, encryption=pymupdf.PDF_ENCRYPT_AES_256, owner_pw=new_password,
                                       user_pw=new_password)
                     pdf_document.close()
+                    self.open_new_created(new_pdf_path)
                     QMessageBox.information(self, 'Success',
                                             f'Password has been changed successfully and saved as {new_pdf_path}.')
         except Exception as e:
@@ -276,13 +285,14 @@ class PDFEditor(QMainWindow):
             password, ok = QInputDialog.getText(self, 'Decrypt PDF', 'Enter current password:',
                                                 QLineEdit.EchoMode.Password)
             if ok and password:
-                pdf_document = fitz.open(pdf_path)
+                pdf_document = pymupdf.open(pdf_path)
                 if not pdf_document.authenticate(password):
                     QMessageBox.critical(self, 'Error', 'Current password is incorrect.')
                     return
                 new_pdf_path = os.path.splitext(pdf_path)[0] + "_decrypted.pdf"
-                pdf_document.save(new_pdf_path, encryption=fitz.PDF_ENCRYPT_NONE)
+                pdf_document.save(new_pdf_path, encryption=pymupdf.PDF_ENCRYPT_NONE)
                 pdf_document.close()
+                self.open_new_created(new_pdf_path)
                 QMessageBox.information(self, 'Success',
                                         f'PDF has been decrypted successfully and saved as {new_pdf_path}.')
         except Exception as e:
@@ -320,10 +330,10 @@ class PDFEditor(QMainWindow):
     def apply_new_order(self, pdf_path, new_order):
         try:
             # Open the original PDF document
-            original_pdf = fitz.open(pdf_path)
+            original_pdf = pymupdf.open(pdf_path)
 
             # Create a new PDF document
-            new_pdf = fitz.open()
+            new_pdf = pymupdf.open()
 
             # Insert pages from the original PDF to the new PDF in the new order
             for i in new_order:
@@ -337,8 +347,30 @@ class PDFEditor(QMainWindow):
             # Close the original PDF document
             original_pdf.close()
 
+            self.open_new_created(new_pdf_path)
+
             logging.info(f"Reordered PDF saved as: {new_pdf_path}")
 
         except Exception as e:
             logging.error(f"Failed to apply new order: {e}")
             QMessageBox.critical(self, 'Error', f'Failed to apply new order: {e}')
+
+    def open_new_created(self, fileName):
+                if fileName:
+                    if not self.tabs.isVisible():
+                        self.setCentralWidget(self.tabs)
+                        self.tabs.setVisible(True)
+
+                    pdf_document = pymupdf.open(fileName)
+                    if pdf_document.is_encrypted:
+                        password, ok = QInputDialog.getText(self, 'Password Required', 'Enter password:',
+                                                            QLineEdit.EchoMode.Password)
+                        if ok and not pdf_document.authenticate(password):
+                            QMessageBox.critical(self, 'Error', 'Incorrect password.')
+                            return
+
+                    pdfWidget = create_pdf_viewer_widget(fileName, pdf_document)
+                    pdfWidget.pdf_path = fileName  # Store the pdf_path for later use
+                    self.tabs.addTab(pdfWidget, fileName.split('/')[-1])
+                    self.tabs.setCurrentWidget(pdfWidget)
+

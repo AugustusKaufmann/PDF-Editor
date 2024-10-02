@@ -8,7 +8,6 @@ from functools import partial
 
 from widgets import DraggableLabel
 
-
 class RearrangePagesDialog(QDialog):
     def __init__(self, pdf_path, parent=None):
         super().__init__(parent)
@@ -208,7 +207,10 @@ class MergePDFsDialog(QDialog):
                         order = self.selected_pdfs.index(pdf_path) + 1
                         preview_label.setText(f"{order}")
                     else:
-                        preview_label.setText("")
+                        pix = fitz.open(pdf_path).load_page(0).get_pixmap(matrix=fitz.Matrix(0.3, 0.3))
+                        qimage = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
+                        pixmap = QPixmap.fromImage(qimage)
+                        preview_label.setPixmap(pixmap)
 
     def get_selected_pdfs(self):
         return self.selected_pdfs
@@ -286,7 +288,10 @@ class SplitPDFDialog(QDialog):
                 order = self.selected_pages.index(int(page_widget.objectName())) + 1
                 page_label.setText(f"{order}")
             else:
-                page_label.setText("")
+                pix = fitz.open(self.pdf_path).load_page(int(page_widget.objectName())).get_pixmap(matrix=fitz.Matrix(0.3, 0.3))
+                qimage = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
+                pixmap = QPixmap.fromImage(qimage)
+                page_label.setPixmap(pixmap)
 
     def get_selected_pages(self):
         return self.selected_pages
